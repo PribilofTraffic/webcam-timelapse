@@ -54,3 +54,22 @@ a separate trial folder and making videos from the live archive
 (mounted read-only), clean-up in dry-run. Its first act was to remake
 2026-11-16, -17 and -18: 2288, 2276 and 2241 frames, all present in the
 videos, against 2010, 1999 and 1967 in the cron ones.
+
+## 2026-11-19: fixes from the code review (same day)
+
+- **A short video is refused.** ffmpeg stops at the first picture it cannot
+  read and still exits 0, so a 10-frame video could be recorded as a
+  2,300-frame day and the clean-up would later delete frames that are in no
+  video. The frames in the finished file are now counted and the video is
+  kept only if every one is there.
+- **The import of an earlier index** no longer depends on the database being
+  empty. It adds any day that has no row, and is remembered once it has run.
+- **A stopped job takes ffmpeg with it** (own process group), temporary files
+  carry the process id, and ones left behind are removed after an hour.
+- **`Capturer._stop` hid a method of `Thread`** on Python 3.12: asking a
+  finished thread whether it was alive raised. Renamed.
+- **Only "too few frames" is ever given up on.** A fault on this side (disk,
+  permissions) is retried hourly while the day is within reach.
+- **Camera state** is judged by the age of the last frame, and a fetch has an
+  overall deadline, so a trickling answer cannot read as "up".
+- Live folders owned by a web server's group need `group_add` (README).

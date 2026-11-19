@@ -23,6 +23,7 @@ import frames
 import settings
 
 MIN_BYTES = 1024
+MAX_BYTES = 50 * 1024 * 1024
 
 
 def looks_like_jpeg(data):
@@ -34,8 +35,24 @@ def looks_like_jpeg(data):
 def fetch(url, timeout):
     """(picture bytes, None) or (None, why not). The reason never contains
     the camera's address: it ends up in a file that may be served."""
+    # `timeout` in requests is per read, not for the whole answer: a camera
+    # that trickles bytes could hold a beat for minutes. So read in pieces
+    # against a deadline of our own.
+    deadline = time.monotonic() + 2 * timeout
     try:
-        response = requests.get(url, timeout=timeout)
+        response = requests.get(url, timeout=timeout, stream=True)
+        try:
+            pieces, size = [], 0
+            for piece in response.iter_content(65536):
+                pieces.append(piece)
+                size += len(piece)
+                if time.monotonic() > deadline:
+                    return None, 'the picture took too long to arrive'
+                if size > MAX_BYTES:
+                    return None, 'the answer was too large to be a picture'
+            content = b''.join(pieces)
+        finally:
+            response.close()
     except requests.exceptions.Timeout:
         return None, 'no answer in time'
     except requests.exceptions.ConnectionError:
@@ -44,9 +61,9 @@ def fetch(url, timeout):
         return None, type(exc).__name__
     if response.status_code != 200:
         return None, f'camera answered {response.status_code}'
-    if not looks_like_jpeg(response.content):
+    if not looks_like_jpeg(content):
         return None, 'the answer was not a whole picture'
-    return response.content, None
+    return content, None
 
 
 def save(data, path):
@@ -76,14 +93,15 @@ class Capturer(threading.Thread):
         self.root = root or settings.FRAMES_DIR
         self.interval = interval or settings.CAPTURE_INTERVAL
         self.fetcher = fetcher
-        self._stop = threading.Event()
+        self._halt = threading.Event()
         self._lock = threading.Lock()
         self._day = None
+        self._last_beat = None
         self._state = {'saved_today': 0, 'missed_today': 0, 'misses_in_a_row': 0,
                        'last_frame': None, 'last_problem': None, 'last_problem_at': None}
 
     def stop(self):
-        self._stop.set()
+        self._halt.set()
 
     def snapshot(self):
         with self._lock:
@@ -127,13 +145,18 @@ class Capturer(threading.Thread):
 
     def run(self):
         announced = None
-        while not self._stop.is_set():
+        while not self._halt.is_set():
             # Sleep to the next multiple of the interval on the wall clock.
             now = time.time()
             wait = self.interval - (now % self.interval)
-            if self._stop.wait(wait):
+            if self._halt.wait(wait):
                 break
             when = datetime.fromtimestamp(round(time.time()), settings.TZ)
+            # A clock nudged backwards can land two wake-ups on one second;
+            # the second would overwrite the first and be counted twice.
+            if self._last_beat is not None and when <= self._last_beat:
+                continue
+            self._last_beat = when
             try:
                 ok = self.beat(when)
             except Exception as exc:        # the beat must never stop

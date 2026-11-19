@@ -36,7 +36,8 @@ settings.apply_timezone()
 APP_DIR = os.path.dirname(os.path.realpath(__file__))
 STATE_FILE = settings.data_path('.webcam_scheduler.json')
 HEARTBEAT_FILE = settings.data_path('.webcam_heartbeat')
-JOB_TIMEOUT = settings.RENDER_TIMEOUT + 300
+# One video job may make several days' videos after a restart.
+JOB_TIMEOUT = settings.RENDER_TIMEOUT * (settings.CATCH_UP_DAYS + 1) + 300
 # The camera is called "down" after this many beats in a row with no frame.
 DOWN_AFTER_MISSES = 4
 
@@ -51,6 +52,7 @@ JOBS = (
 )
 
 _stop = False
+STARTED = time.time()
 
 
 def _on_signal(signum, frame):
@@ -65,7 +67,8 @@ def log(message):
 def public(message):
     """A message that is safe to publish: the status file may be served to
     the web, so addresses are removed."""
-    return re.sub(r'\b\w+://\S+', '(address hidden)', str(message))[:300]
+    message = re.sub(r'\b\w+://\S+', '(address hidden)', str(message))
+    return re.sub(r'(?<![\w.])/[\w./-]{3,}', '(path)', message)[:300]
 
 
 def load_json(path):
@@ -97,10 +100,18 @@ def camera_status(capturer):
     if capturer is None:
         return {'name': settings.CAMERA_NAME, 'state': 'off'}
     snap = capturer.snapshot()
-    if snap['misses_in_a_row'] >= DOWN_AFTER_MISSES:
+    # "Up" means a frame arrived lately, judged by the frame's own time. A
+    # miss counter alone would say "up" for as long as one fetch hung.
+    limit = settings.CAPTURE_INTERVAL * DOWN_AFTER_MISSES + 2 * settings.HTTP_TIMEOUT
+    age = None
+    if snap['last_frame']:
+        age = (datetime.now(settings.TZ) - datetime.fromisoformat(snap['last_frame'])).total_seconds()
+    if snap['misses_in_a_row'] >= DOWN_AFTER_MISSES or (age is not None and age > limit):
         state = 'down'
-    elif snap['last_frame']:
+    elif age is not None:
         state = 'up'
+    elif time.time() - STARTED > limit:
+        state = 'down'              # running a while and never a frame
     else:
         state = 'unknown'           # just started; no beat yet
     return {
@@ -148,7 +159,8 @@ def run_script(script, capturer, jobs):
     a dead loop."""
     proc = subprocess.Popen(
         [sys.executable, os.path.join(APP_DIR, script)], cwd=APP_DIR,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        start_new_session=True)     # so ffmpeg can be stopped along with it
     deadline = time.time() + JOB_TIMEOUT
     output, timed_out = None, False
     while output is None:
@@ -158,7 +170,12 @@ def run_script(script, capturer, jobs):
             beat()
             write_status(capturer, jobs)
             if time.time() > deadline or _stop:
-                proc.kill()
+                # The job AND anything it started (ffmpeg); killing only the
+                # job would leave ffmpeg writing beside the next attempt.
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except OSError:
+                    proc.kill()
                 output, _ = proc.communicate()
                 timed_out = True
     output = (output or '').strip()

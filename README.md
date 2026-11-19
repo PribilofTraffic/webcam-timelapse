@@ -99,6 +99,11 @@ second. This does not do that; a test counts the frames.
    The first lines list every job. Within 15 seconds you should see
    `camera: frames arriving`.
 
+   If the frames or videos folder belongs to a group the container's user is
+   not in (a web server's group, say), add that group's number to the
+   service: `group_add: ["33"]`. Without it nothing can be written, and the
+   status file says `could not save the frame`.
+
 ## Checking it is working
 
 - `docker ps` shows the container as `healthy`. Healthy means the main loop is
@@ -169,7 +174,7 @@ same.
 python3 -m unittest discover -s tests
 ```
 
-44 tests. They need `astral` (see `requirements.txt`); the ones that make a
+49 tests. They need `astral` (see `requirements.txt`); the ones that make a
 real video are skipped where ffmpeg is not installed.
 
 ## Licence

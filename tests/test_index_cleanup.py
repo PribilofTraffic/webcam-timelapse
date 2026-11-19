@@ -67,24 +67,57 @@ class TestIndex(unittest.TestCase):
         self.assertEqual(index_db.import_legacy(conn, legacy, videos), 1)
         self.assertEqual(index_db.video_days(conn), {date(2026, 11, 17)})
         self.assertEqual(index_db.latest(conn)['generated_at'], '2026-11-17 21:00:19')
-        # Only an EMPTY database is seeded.
+        # Done once: a second start takes nothing.
         self.assertEqual(index_db.import_legacy(conn, legacy, videos), 0)
 
-    def test_a_day_that_cannot_be_made_is_retried_a_few_times_then_left(self):
+    def test_legacy_import_works_when_a_video_was_recorded_first(self):
+        """The first start may make a video before the old index is in
+        place. The old videos must still come over, without replacing the
+        new row."""
+        folder = tempfile.mkdtemp(prefix='webcam_legacy_')
+        for name in ('stg_timelapse_20261117.mp4', 'stg_timelapse_20261118.mp4'):
+            open(os.path.join(folder, name), 'w').close()
+        legacy = os.path.join(folder, 'old.json')
+        conn = memory_db()
+        index_db.add_video(conn, date(2026, 11, 18), 'stg_timelapse_20261118.mp4', 2241, 74.7, 12.1, 'new')
+        self.assertEqual(index_db.import_legacy(conn, legacy, folder), 0)     # no file yet: try later
+        with open(legacy, 'w') as fh:
+            json.dump({'timelapses': [
+                {'type': 'daily', 'date': d, 'filename': f'stg_timelapse_{d.replace("-", "")}.mp4',
+                 'image_count': 1, 'duration_seconds': 1, 'size_mb': 1, 'generated_at': 'old'}
+                for d in ('2026-11-17', '2026-11-18', '2026-11-17')]}, fh)
+        self.assertEqual(index_db.import_legacy(conn, legacy, folder), 1)
+        self.assertEqual(index_db.video_days(conn), {date(2026, 11, 17), date(2026, 11, 18)})
+        self.assertEqual(index_db.latest(conn)['generated_at'], 'new')
+
+    def test_a_day_with_no_frames_is_retried_a_few_times_then_left(self):
         conn = memory_db()
         now = datetime(2026, 12, 21, 21, 0, tzinfo=TZ)
         day = date(2026, 12, 21)
+        stamp = now.isoformat(timespec='seconds')
         self.assertIn(day, render.due_days(conn, now))
-        index_db.note_attempt(conn, day, '0 frames', now.isoformat(timespec='seconds'))
+        index_db.note_attempt(conn, day, f'{render.NO_FRAMES} (0)', stamp)
         self.assertNotIn(day, render.due_days(conn, now + timedelta(minutes=30)))
         self.assertIn(day, render.due_days(conn, now + timedelta(minutes=61)))
         for _ in range(2):
-            index_db.note_attempt(conn, day, '0 frames', now.isoformat(timespec='seconds'))
+            index_db.note_attempt(conn, day, f'{render.NO_FRAMES} (0)', stamp)
         self.assertNotIn(day, render.due_days(conn, now + timedelta(hours=3)))
         # ...and a video clears the slate.
         index_db.add_video(conn, day, 'a.mp4', 10, 1, 1, 'x')
         self.assertIsNone(index_db.attempt(conn, day))
         self.assertNotIn(day, render.due_days(conn, now + timedelta(hours=3)))
+
+    def test_a_fault_on_our_side_is_retried_hourly_without_limit(self):
+        """A full disk or a folder that cannot be written must not cost the
+        day its video once the fault is fixed."""
+        conn = memory_db()
+        now = datetime(2026, 12, 21, 21, 0, tzinfo=TZ)
+        day = date(2026, 12, 21)
+        for _ in range(6):
+            index_db.note_attempt(conn, day, 'PermissionError: Permission denied',
+                                  now.isoformat(timespec='seconds'))
+        self.assertNotIn(day, render.due_days(conn, now + timedelta(minutes=30)))
+        self.assertIn(day, render.due_days(conn, now + timedelta(minutes=61)))
 
 
 class TestSharePage(unittest.TestCase):

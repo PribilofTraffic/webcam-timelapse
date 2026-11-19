@@ -117,6 +117,17 @@ class TestCapture(unittest.TestCase):
         self.assertIn('GB free', cap.snapshot()['last_problem'])
         self.assertFalse(os.path.exists(os.path.join(self.root, '2026')))
 
+    def test_a_finished_thread_can_still_be_asked_if_it_is_alive(self):
+        """Naming the stop flag `_stop` hid a method of Thread on Python
+        3.12: is_alive() on a finished thread raised, and the main loop's
+        "start it again" check crashed instead."""
+        cap = capture.Capturer(url='x', root=self.root, interval=1,
+                               fetcher=lambda url, timeout: (support.FAKE_JPEG, None))
+        cap.start()
+        cap.stop()
+        cap.join(timeout=5)
+        self.assertFalse(cap.is_alive())
+
     def test_fetch_reasons_never_carry_the_address(self):
         data, why = capture.fetch('http://127.0.0.1:9/secret/cam.php', 1)
         self.assertIsNone(data)

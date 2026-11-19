@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS videos (
     window_start     TEXT,               -- first and last moment the video covers
     window_end       TEXT
 );
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
 CREATE TABLE IF NOT EXISTS attempts (
     day       TEXT PRIMARY KEY,
     tries     INTEGER NOT NULL,
@@ -115,15 +119,18 @@ def write_index(conn, now=None, path=None):
 
 
 def import_legacy(conn, path=None, video_dir=None):
-    """Seed an EMPTY database from the index an earlier setup wrote.
+    """Take the videos an earlier setup made, from the index it wrote.
 
-    Only daily videos whose file is really in the video folder are taken:
-    an entry for a video that no longer exists (old weekly and monthly ones)
-    would be a dead link on the page. Returns how many were taken.
+    Runs until it has succeeded once (remembered in the database), and adds
+    only days that have no row yet, so it does not matter whether a video was
+    recorded here first. Only daily videos whose file is really in the video
+    folder are taken: an entry for a video that no longer exists (old weekly
+    and monthly ones) would be a dead link on the page. Returns how many were
+    taken; a missing or unreadable file takes none and is tried again later.
     """
     path = path or settings.LEGACY_INDEX
     video_dir = video_dir or settings.VIDEO_DIR
-    if conn.execute('SELECT 1 FROM videos LIMIT 1').fetchone():
+    if conn.execute("SELECT 1 FROM meta WHERE key = 'legacy_imported'").fetchone():
         return 0
     try:
         with open(path) as fh:
@@ -137,7 +144,7 @@ def import_legacy(conn, path=None, video_dir=None):
                 continue
             day = date.fromisoformat(entry['date'])
             filename = os.path.basename(entry['filename'])
-            if not os.path.isfile(os.path.join(video_dir, filename)):
+            if has_video(conn, day) or not os.path.isfile(os.path.join(video_dir, filename)):
                 continue
             add_video(conn, day, filename, entry.get('image_count') or 0,
                       entry.get('duration_seconds') or 0.0, entry.get('size_mb') or 0.0,
@@ -145,4 +152,7 @@ def import_legacy(conn, path=None, video_dir=None):
             taken += 1
         except (AttributeError, KeyError, TypeError, ValueError):
             continue
+    with conn:
+        conn.execute("INSERT OR REPLACE INTO meta VALUES ('legacy_imported', ?)",
+                     (datetime.now(settings.TZ).isoformat(timespec='seconds'),))
     return taken

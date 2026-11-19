@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import time
 
 import settings
 
@@ -35,6 +36,35 @@ def write_list(frames, list_file):
             fh.write(f"file '{quoted}'\n")
 
 
+def count_frames(path):
+    """How many frames a video file holds, or None if that cannot be read."""
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries',
+             'stream=nb_frames', '-of', 'csv=p=0', path],
+            capture_output=True, text=True, timeout=120)
+        return int(result.stdout.strip().split(',')[0])
+    except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+        return None
+
+
+def remove_stale_temp_files(folder, older_than_s=3600):
+    """Temporary files a stopped run left behind in the video folder."""
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return
+    now = time.time()
+    for name in names:
+        if name.startswith('.') and name.endswith(('.part.mp4', '.frames.txt')):
+            path = os.path.join(folder, name)
+            try:
+                if now - os.path.getmtime(path) > older_than_s:
+                    os.remove(path)
+            except OSError:
+                pass
+
+
 def render(frames, output, title):
     """Make `output` from `frames`. Returns (ok, message).
 
@@ -47,8 +77,10 @@ def render(frames, output, title):
     folder = os.path.dirname(output)
     os.makedirs(folder, exist_ok=True)
     stem = os.path.basename(output)
-    list_file = os.path.join(folder, f'.{stem}.frames.txt')
-    partial = os.path.join(folder, f'.{stem}.part.mp4')
+    # The process id keeps two runs (one left over from a stopped job) from
+    # ever writing the same temporary file.
+    list_file = os.path.join(folder, f'.{stem}.{os.getpid()}.frames.txt')
+    partial = os.path.join(folder, f'.{stem}.{os.getpid()}.part.mp4')
     try:
         write_list(frames, list_file)
         result = subprocess.run(command(list_file, partial, title), capture_output=True,
@@ -58,6 +90,12 @@ def render(frames, output, title):
             return False, f'ffmpeg exited {result.returncode}: {tail[0][:200]}'
         if not os.path.isfile(partial) or os.path.getsize(partial) == 0:
             return False, 'ffmpeg wrote nothing'
+        # ffmpeg stops quietly at the first picture it cannot read and still
+        # reports success. A short video recorded as complete would let the
+        # clean-up delete frames that are in no video, so count them.
+        made = count_frames(partial)
+        if made != len(frames):
+            return False, f'the video has {made} frames, expected {len(frames)}; not kept'
         os.replace(partial, output)
         return True, 'ok'
     except subprocess.TimeoutExpired:

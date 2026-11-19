@@ -81,6 +81,35 @@ class TestRealVideo(unittest.TestCase):
         self.assertEqual(open(output).read(), 'yesterday')
         self.assertEqual(os.listdir(folder), ['day.mp4'])
 
+    def test_a_video_missing_frames_is_refused(self):
+        """ffmpeg stops at the first picture it cannot read and still exits
+        0. Recorded as complete, that video would let the clean-up delete
+        frames that are in no video."""
+        folder = tempfile.mkdtemp(prefix='webcam_out_')
+        pictures = sorted(os.path.join(self.pictures, n) for n in os.listdir(self.pictures))
+        empty = os.path.join(folder, 'empty.jpg')
+        open(empty, 'w').close()
+        output = os.path.join(folder, 'day.mp4')
+        with open(output, 'w') as fh:
+            fh.write('yesterday')
+        ok, message = video.render(pictures[:10] + [empty] + pictures[10:], output, 'A day')
+        self.assertFalse(ok)
+        self.assertIn('expected 21', message)
+        with open(output) as fh:
+            self.assertEqual(fh.read(), 'yesterday')
+        self.assertEqual(sorted(os.listdir(folder)), ['day.mp4', 'empty.jpg'])
+
+    def test_stale_temp_files_are_removed_and_videos_are_not(self):
+        folder = tempfile.mkdtemp(prefix='webcam_out_')
+        old = os.path.getmtime(folder) - 7200
+        for name in ('.x.mp4.123.part.mp4', '.x.mp4.123.frames.txt', 'x.mp4', '.fresh.mp4.9.part.mp4'):
+            path = os.path.join(folder, name)
+            open(path, 'w').close()
+            if 'fresh' not in name:
+                os.utime(path, (old, old))
+        video.remove_stale_temp_files(folder)
+        self.assertEqual(sorted(os.listdir(folder)), ['.fresh.mp4.9.part.mp4', 'x.mp4'])
+
     def test_a_june_day_is_made_from_two_date_folders(self):
         """End to end: frames either side of midnight become one video named
         for the day the light began, and the index and share page follow."""

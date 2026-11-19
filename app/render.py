@@ -27,6 +27,7 @@ import video
 settings.apply_timezone()
 
 RETRY_AFTER = timedelta(hours=1)
+NO_FRAMES = 'too few frames'
 
 
 def due_days(conn, now):
@@ -37,7 +38,11 @@ def due_days(conn, now):
             continue
         tried = index_db.attempt(conn, day)
         if tried:
-            if tried['tries'] >= settings.MAX_RENDER_TRIES:
+            # Only "the camera gave us nothing" is ever given up on. A fault
+            # on this side (disk full, a folder that cannot be written) is
+            # tried again every hour for as long as the day is in reach, so
+            # fixing the fault is enough to get the video.
+            if tried['result'].startswith(NO_FRAMES) and tried['tries'] >= settings.MAX_RENDER_TRIES:
                 continue
             if now - datetime.fromisoformat(tried['last_try']) < RETRY_AFTER:
                 continue
@@ -53,7 +58,7 @@ def make(conn, day, now, force=False):
     if len(pictures) < settings.MIN_FRAMES:
         message = f'{day}: only {len(pictures)} frames between {span}; no video'
         if not force:
-            index_db.note_attempt(conn, day, f'{len(pictures)} frames', now.isoformat(timespec='seconds'))
+            index_db.note_attempt(conn, day, f'{NO_FRAMES} ({len(pictures)})', now.isoformat(timespec='seconds'))
         return False, message
     output = settings.video_file(day)
     ok, why = video.render(pictures, output, f'{settings.CAMERA_NAME} - {day:%B %d, %Y}')
@@ -81,6 +86,7 @@ def main():
     args = parser.parse_args()
 
     now = datetime.now(settings.TZ)
+    video.remove_stale_temp_files(settings.VIDEO_DIR)
     conn = index_db.connect()
     try:
         seeded = index_db.import_legacy(conn)
