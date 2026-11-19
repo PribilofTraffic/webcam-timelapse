@@ -168,6 +168,33 @@ same.
 - **Capture stops when the disk has under 5 GB free**, and the status file
   says so.
 
+## How the original site is wired up
+
+On pribiloftraffic.com:
+
+- **The camera is on an island; the server is somewhere else.** They are
+  joined by [ZeroTier](https://www.zerotier.com/), a private network, and
+  `WEBCAM_URL` is the camera's ZeroTier address.
+- **nginx serves the website** as plain files. The frames, videos and share
+  pages folders are inside the site's own folder, so the videos are served
+  the moment they are written. The index is linked into the site's data
+  folder.
+- **nginx also reverse-proxies the live camera picture** under a path on the
+  site, because a visitor's browser cannot reach a private address. That is
+  for the live view; this container does not need it.
+- **Cloudflare sits in front** for HTTPS and caching.
+
+None of this is required. The container only needs an address it can reach
+and a folder to write to.
+
+- **Any private network will do in place of ZeroTier:** Tailscale, NetBird,
+  Headscale or plain WireGuard. Docker containers go out through the host, so
+  whatever the host can reach, the container can reach. With Tailscale, put
+  the device's `100.x.x.x` address in `.env`; its device names often do not
+  resolve inside a container.
+- **Any web server will do in place of nginx.** It only has to serve the
+  files in the data folder. Nothing here needs to be proxied.
+
 ## Tests
 
 ```
