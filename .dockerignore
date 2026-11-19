@@ -1,0 +1,9 @@
+.git
+data
+frames
+videos
+backups
+tests
+__pycache__
+*.md
+.env

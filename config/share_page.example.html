@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <meta name="description" content="{{description}}">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="video.other">
+    <meta property="og:url" content="{{page_url}}">
+    <meta property="og:title" content="{{title}}">
+    <meta property="og:description" content="{{description}}">
+    <meta property="og:image" content="{{og_image}}">
+    <meta property="og:video" content="{{video_url}}">
+    <meta property="og:video:secure_url" content="{{video_url}}">
+    <meta property="og:video:type" content="video/mp4">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{title}}">
+    <meta name="twitter:description" content="{{description}}">
+    <meta name="twitter:image" content="{{og_image}}">
+
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:       #0d1117;
+            --surface:  #161b22;
+            --surface2: #21262d;
+            --border:   #30363d;
+            --text:     #e6edf3;
+            --muted:    #8b949e;
+            --accent:   #58a6ff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Rubik', 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .card {
+            max-width: 900px;
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+        video { width: 100%; display: block; background: #000; }
+        .info {
+            padding: 20px 25px;
+        }
+        h1 { font-size: 1.35em; font-weight: 700; margin-bottom: 8px; }
+        p { color: var(--muted); font-size: 0.92em; margin-bottom: 16px; }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--text);
+            font-size: 0.88em;
+            font-weight: 600;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .back-link:hover { background: var(--border); border-color: var(--accent); color: var(--accent); }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <video controls autoplay muted playsinline>
+            <source src="{{video_path}}" type="video/mp4">
+        </video>
+        <div class="info">
+            <h1>{{title}}</h1>
+            <p>{{description}}</p>
+            <a href="{{back_link}}" class="back-link">&#8592; All Timelapses</a>
+        </div>
+    </div>
+</body>
+</html>

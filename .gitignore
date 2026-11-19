@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.env
+*.log
+*.log.*
+data/
+backups/
+# A deployment's own site description stays local
+config/site.json
+*.bak
+*.tar
+config/share_page.html
