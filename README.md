@@ -204,6 +204,21 @@ python3 -m unittest discover -s tests
 49 tests. They need `astral` (see `requirements.txt`); the ones that make a
 real video are skipped where ffmpeg is not installed.
 
+## Where this came from
+
+The idea is older than the AI help. It began years ago as a hand-written script that saved pictures from a
+Raspberry Pi camera on St. George Island and stitched them into a video of
+the day.
+It was written and run that way, without AI, long before any was involved.
+
+AI came later, as an assistant. Claude helped tidy the code, add tests, find
+bugs and package it as a container other people can run. The ideas, and the
+judgement about what matters on these islands, are the maintainer's own.
+
+Most of the Pribilof Traffic collectors started on Raspberry Pis, and
+Raspberry Pis on the islands still run the webcam and the aircraft (tar1090)
+and ACARS receivers today.
+
 ## Licence
 
 MIT. See `LICENSE`.
