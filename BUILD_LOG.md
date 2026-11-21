@@ -73,3 +73,13 @@ videos, against 2010, 1999 and 1967 in the cron ones.
 - **Camera state** is judged by the age of the last frame, and a fetch has an
   overall deadline, so a trickling answer cannot read as "up".
 - Live folders owned by a web server's group need `group_add` (README).
+
+## 2026-11-20: switched over on the original site
+
+The six cron lines were switched off and this container took over the live
+folders at 13:59 AKST, after a two-day trial whose frames matched the cron job
+hour for hour. It carried 384 existing videos into its index and made its
+first own daily video that evening: 2237 frames, 09:23 to 18:43, every frame
+in the file. Its first real clean-up removed the frames of a day 31 days back
+(1.56 GB), whose video was on disk. The old scripts were retired on
+2026-11-21.

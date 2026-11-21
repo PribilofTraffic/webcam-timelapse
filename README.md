@@ -4,9 +4,12 @@ One small container that saves a picture from a webcam every 15 seconds and
 turns each day's pictures into a timelapse video.
 
 It was built for [pribiloftraffic.com](https://www.pribiloftraffic.com), which
-watches a camera on St. George Island in the Bering Sea. Nothing in the code
-names that camera: you describe yours in one file and put its address in
-`.env`.
+watches a Raspberry Pi camera on St. George Island in the Bering Sea, reached
+over [ZeroTier](https://www.zerotier.com/). Nothing in the code names that
+camera, that island or that network: you describe your camera in one file
+(where it is, its time zone, how often to take a picture) and put its address
+in `.env`. Any camera that hands back a JPEG for a plain web request works,
+anywhere in the world.
 
 ## What it does
 
@@ -35,7 +38,11 @@ second. This does not do that; a test counts the frames.
 ## What you need
 
 - Docker with Compose.
-- A camera that answers a plain HTTP request with one JPEG.
+- A camera that answers a plain HTTP request with one JPEG. A Raspberry Pi
+  with a camera module does this well: the original runs
+  [RPi Cam Web Interface](https://elinux.org/RPi-Cam-Web-Interface), whose
+  `/html/cam_get.php` returns the current picture. Most IP cameras have a
+  similar "snapshot" address.
 - About 1.5 GB of disk per day of frames at 1024x576 (45 GB for 30 days).
 
 ## Set it up
@@ -85,9 +92,16 @@ second. This does not do that; a test counts the frames.
          - ${WEBCAM_VIDEO_DIR}:/videos
          - ${WEBCAM_SHARE_DIR:-./webcam_timelapse/share}:/share
          - ${WEBCAM_BACKUP_DIR:-./webcam_timelapse/backups}:/backups
+         # Daylight-saving rules from the host, so a rule change needs no
+         # rebuild. Leave it out on a host without /usr/share/zoneinfo.
+         - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
        mem_limit: 1g
        cpus: 4
    ```
+
+   It runs on an ordinary Linux server (the original's). The image is
+   `python:3.12-slim` plus Debian's ffmpeg, both published for arm64, so it
+   should also build on a Raspberry Pi 4 or 5; that has not been tested.
 
 5. **Start it and look.**
 
@@ -172,9 +186,11 @@ same.
 
 On pribiloftraffic.com:
 
-- **The camera is on an island; the server is somewhere else.** They are
-  joined by [ZeroTier](https://www.zerotier.com/), a private network, and
-  `WEBCAM_URL` is the camera's ZeroTier address.
+- **The camera is a Raspberry Pi on the island; the server is somewhere
+  else.** They are joined by [ZeroTier](https://www.zerotier.com/), a private
+  network, and `WEBCAM_URL` is the Pi's ZeroTier address. The Pi only runs
+  the camera; the frames, videos and clean-up all happen on the server, so
+  the Pi's SD card is never filled or worn by the archive.
 - **nginx serves the website** as plain files. The frames, videos and share
   pages folders are inside the site's own folder, so the videos are served
   the moment they are written. The index is linked into the site's data
@@ -195,13 +211,23 @@ and a folder to write to.
 - **Any web server will do in place of nginx.** It only has to serve the
   files in the data folder. Nothing here needs to be proxied.
 
+## Time zones and daylight saving
+
+The camera's zone is a name in `site.json` (`America/Anchorage`), never a
+fixed offset, and every time is worked out with that zone's rules. Frames are
+filed by local date and hour, daylight is computed from the sun, and labels
+come from the clock (AKST in winter, AKDT in summer). With the host's
+`/usr/share/zoneinfo` mounted, a change to the rules reaches the container
+without a rebuild. The tests include both changeover days and a zone with no
+daylight saving.
+
 ## Tests
 
 ```
 python3 -m unittest discover -s tests
 ```
 
-49 tests. They need `astral` (see `requirements.txt`); the ones that make a
+57 tests. They need `astral` (see `requirements.txt`); the ones that make a
 real video are skipped where ffmpeg is not installed.
 
 ## Where this came from
