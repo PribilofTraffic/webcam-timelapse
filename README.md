@@ -11,6 +11,16 @@ camera, that island or that network: you describe your camera in one file
 in `.env`. Any camera that hands back a JPEG for a plain web request works,
 anywhere in the world.
 
+![One frame from the St. George camera, 10:34 AM on 20 November 2026: grey sky, the Bering Sea and houses along the shore](docs/st_george_frame.webp)
+
+*One frame, as saved every 15 seconds: St. George, 10:34 AM, 20 November 2026.*
+
+![The whole of 20 November 2026 on St. George, dawn to dusk in nine seconds: snow squalls roll through and the sky opens toward evening](docs/st_george_day.webp)
+
+*The same day, dawn to dusk, cut down to nine seconds. The real video, 2,237
+frames over 75 seconds, is
+[on pribiloftraffic.com](https://www.pribiloftraffic.com/timelapsestg/videos/daily/stg_timelapse_20261120.mp4).*
+
 ## What it does
 
 | Job | When | Writes |
